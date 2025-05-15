@@ -1,0 +1,11 @@
+###
+
+GET http://localhost:8080/?cep=73340608
+
+###
+
+GET http://localhost:8080/?cep=01310930
+
+###
+
+GET "http://api.weatherapi.com/v1/current.json?key=5912bbabd3ed4d60a8323331251505&q=São Paulo"
