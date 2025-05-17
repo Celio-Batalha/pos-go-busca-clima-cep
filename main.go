@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 	"regexp"
+	"text/template"
 )
 
 type WeatherResponse struct {
-	TempC float64 `json:"temp_C"`
-	TempF float64 `json:"temp_F"`
-	TempK float64 `json:"temp_K"`
+	TempC  float64 `json:"temp_c"`
+	TempF  float64 `json:"temp_f"`
+	TempK  float64 `json:"temp_k"`
+	Cidade string
 }
 
 type ErrorResponse struct {
@@ -37,23 +41,21 @@ const viaCEPURL = "https://viacep.com.br/ws/%s/json/"             // URL da API 
 const weatherAPIURL = "http://api.weatherapi.com/v1/current.json" // URL da API WeatherAPI para buscar dados climáticos.
 
 func main() {
-	// router := gin.Default()
-	// router.GET("/clima/:cep", buscarClima)
-
-	// port := os.Getenv("PORT")
-	// if port == "" {
-	// 	port = "8080"
-	// }
-
-	// router.Run(":" + port)
 
 	http.HandleFunc("/", handler)
-	fmt.Println("Servidor rodando na porta 8080...")
-	http.ListenAndServe(":8080", nil)
+	fmt.Println("Servidor rodando na porta 7000...")
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	http.ListenAndServe(":"+port, nil)
 
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	t := template.Must(template.New("temperatura.html").ParseFiles("temperatura.html"))
+
 	if r.URL.Path != "/" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -64,31 +66,24 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	// cep := c.Param("cep")
 
 	if !validarCEP(cepParam) {
-		// w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(ErrorResponse{Message: "CEP inválido"})
-		// c.JSON(400, ErrorResponse{Message: "CEP inválido"})
 		return
 	}
 
 	localizacao, err := buscarLocalizacao(cepParam)
-	json.NewEncoder(w).Encode(ErrorResponse{Message: localizacao.Localidade})
 	if err != nil {
 		json.NewEncoder(w).Encode(ErrorResponse{Message: "Erro ao buscar localização"})
-		// c.JSON(500, ErrorResponse{Message: "Erro ao buscar localização"})
 		return
 	}
 	if localizacao.Erro {
 		json.NewEncoder(w).Encode(ErrorResponse{Message: "CEP não encontrado"})
-		// c.JSON(404, ErrorResponse{Message: "CEP não encontrado"})
 		return
 	}
 	clima, err := buscarClimaAtual(localizacao.Localidade)
 	if err != nil {
 		json.NewEncoder(w).Encode(ErrorResponse{Message: "Erro ao buscar clima atual"})
-		// c.JSON(http.StatusInternalServerError, ErrorResponse{Message: "Erro ao buscar clima atual"})
 		return
 	}
 
@@ -96,12 +91,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	tempF := clima.Current.TempF
 	tempK := tempC + 273.15
 
-	json.NewEncoder(w).Encode(WeatherResponse{
-		TempC: tempC,
-		TempF: tempF,
-		TempK: tempK,
+	t.Execute(w, WeatherResponse{
+		TempC:  tempC,
+		TempF:  tempF,
+		TempK:  tempK,
+		Cidade: localizacao.Localidade,
 	})
-
 }
 
 func validarCEP(cep string) bool {
@@ -124,7 +119,7 @@ func buscarLocalizacao(cep string) (ViaCEPResponse, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return ViaCEPResponse{}, fmt.Errorf("erro ao buscar localização: %s", resp.StatusCode)
+		return ViaCEPResponse{}, fmt.Errorf("erro ao buscar localização: %v", resp.StatusCode)
 	}
 	var viaCEP ViaCEPResponse
 	err = json.NewDecoder(resp.Body).Decode(&viaCEP)
@@ -138,8 +133,9 @@ func buscarClimaAtual(localidade string) (WeatherAPIResponse, error) {
 		return WeatherAPIResponse{}, fmt.Errorf("chave da API não configurada")
 	}
 
-	// q := fmt.Sprintf("%s", localidade)
-	url := fmt.Sprintf("%s?key=%s&q=%s", weatherAPIURL, apiKey, localidade)
+	cidade := url.QueryEscape(localidade)
+	fmt.Printf("%s", localidade)
+	url := fmt.Sprintf("%s?key=%s&q=%s", weatherAPIURL, apiKey, cidade)
 	resp, err := http.Get(url)
 	if err != nil {
 		return WeatherAPIResponse{}, err

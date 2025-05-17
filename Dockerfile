@@ -1,11 +1,7 @@
-FROM golang:1.21 as build
+FROM golang:1.22-alpine as build
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download -x
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o cloudrun
-
-FROM scratch
-WORKDIR /app
-COPY --from=build /app/cloudrun .
-ENTRYPOINT ["/app/cloudrun"]
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+ENTRYPOINT ["./main"]
